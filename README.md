@@ -1,3 +1,7 @@
+### [Imb-freiburg/hand3d](https://github.com/lmb-freiburg/hand3d) Repository adapted for Tensorflow 2
+
+
+
 # ColorHandPose3D network
 
 ![Teaser](teaser.png)
@@ -12,20 +16,6 @@ The network ships with a minimal example, that performs a forward pass and shows
 - *run.py* - Will run a forward pass of the network on the provided examples
 
 You can compare your results to the content of the folder "results", which shows the predictions we get on our system.
-
-
-## Recommended system
-Recommended system (tested):
-- Ubuntu 16.04.2 (xenial)
-- Tensorflow 1.3.0 GPU build with CUDA 8.0.44 and CUDNN 5.1
-- Python 3.5.2
-
-
-Python packages used by the example provided and their recommended version:
-- tensorflow==1.3.0
-- numpy==1.13.0
-- scipy==0.18.1
-- matplotlib==1.5.3
 
 ## Preprocessing for training and evaluation
 In order to use the training and evaluation scripts you need download and preprocess the datasets.
@@ -101,7 +91,7 @@ This provides the possibility to reproduce results from the paper that are based
 This project is licensed under the terms of the GPL v2 license. By using the software, you are agreeing to the terms of the [license agreement](https://github.com/lmb-freiburg/hand3d/blob/master/LICENSE).
 
 
-Please cite us in your publications if it helps your research:
+Please cite the original paper in your publications if it helps your research:
 
 	@InProceedings{zb2017hand,
 	  author    = {Christian Zimmermann and Thomas Brox},
