@@ -20,6 +20,8 @@ import os
 
 import tensorflow as tf
 
+tf.compat.v1.disable_eager_execution()
+
 from utils.general import crop_image_from_xy
 from utils.canonical_trafo import canonical_trafo, flip_right_hand
 from utils.relative_trafo import bone_rel_trafo
@@ -125,13 +127,13 @@ class BinaryDbReader(object):
 
         """ READ DATA ITEMS"""
         # Start reader
-        reader = tf.FixedLengthRecordReader(header_bytes=0, record_bytes=record_bytes)
-        _, value = reader.read(tf.train.string_input_producer([self.path_to_db]))
+        reader = tf.compat.v1.FixedLengthRecordReader(header_bytes=0, record_bytes=record_bytes)
+        _, value = reader.read(tf.compat.v1.train.string_input_producer([self.path_to_db]))
 
         # decode to floats
         bytes_read = 0
         data_dict = dict()
-        record_bytes_float32 = tf.decode_raw(value, tf.float32)
+        record_bytes_float32 = tf.io.decode_raw(value, tf.float32)
 
         # 1. Read keypoint xyz
         keypoint_xyz = tf.reshape(tf.slice(record_bytes_float32, [bytes_read//4], [kp_xyz_entries]), [self.num_kp, 3])
@@ -158,7 +160,7 @@ class BinaryDbReader(object):
             keypoint_uv = tf.concat([palm_coord_uv_l, keypoint_uv[1:21, :], palm_coord_uv_r, keypoint_uv[-20:, :]], 0)
 
         if self.coord_uv_noise:
-            noise = tf.truncated_normal([42, 2], mean=0.0, stddev=self.coord_uv_noise_sigma)
+            noise = tf.random.truncated_normal([42, 2], mean=0.0, stddev=self.coord_uv_noise_sigma)
             keypoint_uv += noise
 
         data_dict['keypoint_uv'] = keypoint_uv
@@ -170,7 +172,7 @@ class BinaryDbReader(object):
 
         # decode to uint8
         bytes_read += 2
-        record_bytes_uint8 = tf.decode_raw(value, tf.uint8)
+        record_bytes_uint8 = tf.io.decode_raw(value, tf.uint8)
 
         # 4. Read image
         image = tf.reshape(tf.slice(record_bytes_uint8, [bytes_read], [image_bytes]),
@@ -214,10 +216,10 @@ class BinaryDbReader(object):
         one_map, zero_map = tf.ones_like(hand_parts_mask), tf.zeros_like(hand_parts_mask)
         cond_l = tf.logical_and(tf.greater(hand_parts_mask, one_map), tf.less(hand_parts_mask, one_map*18))
         cond_r = tf.greater(hand_parts_mask, one_map*17)
-        hand_map_l = tf.where(cond_l, one_map, zero_map)
-        hand_map_r = tf.where(cond_r, one_map, zero_map)
-        num_px_left_hand = tf.reduce_sum(hand_map_l)
-        num_px_right_hand = tf.reduce_sum(hand_map_r)
+        hand_map_l = tf.compat.v1.where(cond_l, one_map, zero_map)
+        hand_map_r = tf.compat.v1.where(cond_r, one_map, zero_map)
+        num_px_left_hand = tf.reduce_sum(input_tensor=hand_map_l)
+        num_px_right_hand = tf.reduce_sum(input_tensor=hand_map_r)
 
         # PRODUCE the 21 subset using the segmentation masks
         # We only deal with the more prominent hand for each frame and discard the second set of keypoints
@@ -225,9 +227,9 @@ class BinaryDbReader(object):
         kp_coord_xyz_right = keypoint_xyz[-21:, :]
 
         cond_left = tf.logical_and(tf.cast(tf.ones_like(kp_coord_xyz_left), tf.bool), tf.greater(num_px_left_hand, num_px_right_hand))
-        kp_coord_xyz21 = tf.where(cond_left, kp_coord_xyz_left, kp_coord_xyz_right)
+        kp_coord_xyz21 = tf.compat.v1.where(cond_left, kp_coord_xyz_left, kp_coord_xyz_right)
 
-        hand_side = tf.where(tf.greater(num_px_left_hand, num_px_right_hand),
+        hand_side = tf.compat.v1.where(tf.greater(num_px_left_hand, num_px_right_hand),
                              tf.constant(0, dtype=tf.int32),
                              tf.constant(1, dtype=tf.int32))  # left hand = 0; right hand = 1
         data_dict['hand_side'] = tf.one_hot(hand_side, depth=2, on_value=1.0, off_value=0.0, dtype=tf.float32)
@@ -237,7 +239,7 @@ class BinaryDbReader(object):
         # make coords relative to root joint
         kp_coord_xyz_root = kp_coord_xyz21[0, :] # this is the palm coord
         kp_coord_xyz21_rel = kp_coord_xyz21 - kp_coord_xyz_root  # relative coords in metric coords
-        index_root_bone_length = tf.sqrt(tf.reduce_sum(tf.square(kp_coord_xyz21_rel[12, :] - kp_coord_xyz21_rel[11, :])))
+        index_root_bone_length = tf.sqrt(tf.reduce_sum(input_tensor=tf.square(kp_coord_xyz21_rel[12, :] - kp_coord_xyz21_rel[11, :])))
         data_dict['keypoint_scale'] = index_root_bone_length
         data_dict['keypoint_xyz21_normed'] = kp_coord_xyz21_rel / index_root_bone_length  # normalized by length of 12->11
 
@@ -251,18 +253,18 @@ class BinaryDbReader(object):
         kp_coord_xyz21_rel_can, rot_mat = tf.squeeze(kp_coord_xyz21_rel_can), tf.squeeze(rot_mat)
         kp_coord_xyz21_rel_can = flip_right_hand(kp_coord_xyz21_rel_can, tf.logical_not(cond_left))
         data_dict['keypoint_xyz21_can'] = kp_coord_xyz21_rel_can
-        data_dict['rot_mat'] = tf.matrix_inverse(rot_mat)
+        data_dict['rot_mat'] = tf.linalg.inv(rot_mat)
 
         # Set of 21 for visibility
         keypoint_vis_left = keypoint_vis[:21]
         keypoint_vis_right = keypoint_vis[-21:]
-        keypoint_vis21 = tf.where(cond_left[:, 0], keypoint_vis_left, keypoint_vis_right)
+        keypoint_vis21 = tf.compat.v1.where(cond_left[:, 0], keypoint_vis_left, keypoint_vis_right)
         data_dict['keypoint_vis21'] = keypoint_vis21
 
         # Set of 21 for UV coordinates
         keypoint_uv_left = keypoint_uv[:21, :]
         keypoint_uv_right = keypoint_uv[-21:, :]
-        keypoint_uv21 = tf.where(cond_left[:, :2], keypoint_uv_left, keypoint_uv_right)
+        keypoint_uv21 = tf.compat.v1.where(cond_left[:, :2], keypoint_uv_left, keypoint_uv_right)
         data_dict['keypoint_uv21'] = keypoint_uv21
 
         """ DEPENDENT DATA ITEMS: HAND CROP """
@@ -270,35 +272,35 @@ class BinaryDbReader(object):
             crop_center = keypoint_uv21[12, ::-1]
 
             # catch problem, when no valid kp available (happens almost never)
-            crop_center = tf.cond(tf.reduce_all(tf.is_finite(crop_center)), lambda: crop_center,
-                                  lambda: tf.constant([0.0, 0.0]))
+            crop_center = tf.cond(pred=tf.reduce_all(input_tensor=tf.math.is_finite(crop_center)), true_fn=lambda: crop_center,
+                                  false_fn=lambda: tf.constant([0.0, 0.0]))
             crop_center.set_shape([2, ])
 
             if self.crop_center_noise:
-                noise = tf.truncated_normal([2], mean=0.0, stddev=self.crop_center_noise_sigma)
+                noise = tf.random.truncated_normal([2], mean=0.0, stddev=self.crop_center_noise_sigma)
                 crop_center += noise
 
             crop_scale_noise = tf.constant(1.0)
             if self.crop_scale_noise:
-                    crop_scale_noise = tf.squeeze(tf.random_uniform([1], minval=1.0, maxval=1.2))
+                    crop_scale_noise = tf.squeeze(tf.random.uniform([1], minval=1.0, maxval=1.2))
 
             # select visible coords only
-            kp_coord_h = tf.boolean_mask(keypoint_uv21[:, 1], keypoint_vis21)
-            kp_coord_w = tf.boolean_mask(keypoint_uv21[:, 0], keypoint_vis21)
+            kp_coord_h = tf.boolean_mask(tensor=keypoint_uv21[:, 1], mask=keypoint_vis21)
+            kp_coord_w = tf.boolean_mask(tensor=keypoint_uv21[:, 0], mask=keypoint_vis21)
             kp_coord_hw = tf.stack([kp_coord_h, kp_coord_w], 1)
 
             # determine size of crop (measure spatial extend of hw coords first)
-            min_coord = tf.maximum(tf.reduce_min(kp_coord_hw, 0), 0.0)
-            max_coord = tf.minimum(tf.reduce_max(kp_coord_hw, 0), self.image_size)
+            min_coord = tf.maximum(tf.reduce_min(input_tensor=kp_coord_hw, axis=0), 0.0)
+            max_coord = tf.minimum(tf.reduce_max(input_tensor=kp_coord_hw, axis=0), self.image_size)
 
             # find out larger distance wrt the center of crop
             crop_size_best = 2*tf.maximum(max_coord - crop_center, crop_center - min_coord)
-            crop_size_best = tf.reduce_max(crop_size_best)
+            crop_size_best = tf.reduce_max(input_tensor=crop_size_best)
             crop_size_best = tf.minimum(tf.maximum(crop_size_best, 50.0), 500.0)
 
             # catch problem, when no valid kp available
-            crop_size_best = tf.cond(tf.reduce_all(tf.is_finite(crop_size_best)), lambda: crop_size_best,
-                                  lambda: tf.constant(200.0))
+            crop_size_best = tf.cond(pred=tf.reduce_all(input_tensor=tf.math.is_finite(crop_size_best)), true_fn=lambda: crop_size_best,
+                                  false_fn=lambda: tf.constant(200.0))
             crop_size_best.set_shape([])
 
             # calculate necessary scaling
@@ -308,7 +310,7 @@ class BinaryDbReader(object):
             data_dict['crop_scale'] = scale
 
             if self.crop_offset_noise:
-                noise = tf.truncated_normal([2], mean=0.0, stddev=self.crop_offset_noise_sigma)
+                noise = tf.random.truncated_normal([2], mean=0.0, stddev=self.crop_offset_noise_sigma)
                 crop_center += noise
 
             # Crop image
@@ -360,7 +362,7 @@ class BinaryDbReader(object):
                                                      valid_vec=keypoint_vis21)
         
         if self.scoremap_dropout:
-            scoremap = tf.nn.dropout(scoremap, self.scoremap_dropout_prob,
+            scoremap = tf.nn.dropout(scoremap, 1 - (self.scoremap_dropout_prob),
                                         noise_shape=[1, 1, 21])
             scoremap *= self.scoremap_dropout_prob
 
@@ -369,7 +371,7 @@ class BinaryDbReader(object):
         if self.scale_to_size:
             image, keypoint_uv21, keypoint_vis21 = data_dict['image'], data_dict['keypoint_uv21'], data_dict['keypoint_vis21']
             s = image.get_shape().as_list()
-            image = tf.image.resize_images(image, self.scale_target_size)
+            image = tf.image.resize(image, self.scale_target_size)
             scale = (self.scale_target_size[0]/float(s[0]), self.scale_target_size[1]/float(s[1]))
             keypoint_uv21 = tf.stack([keypoint_uv21[:, 0] * scale[1],
                                       keypoint_uv21[:, 1] * scale[0]], 1)
@@ -384,7 +386,7 @@ class BinaryDbReader(object):
                                       tf.expand_dims(tf.cast(data_dict['hand_parts'], tf.float32), -1),
                                       tf.cast(data_dict['hand_mask'], tf.float32)], 2)
             s = tensor_stack.get_shape().as_list()
-            tensor_stack_cropped = tf.random_crop(tensor_stack,
+            tensor_stack_cropped = tf.image.random_crop(tensor_stack,
                                                   [self.random_crop_size, self.random_crop_size, s[2]])
             data_dict = dict()  # delete everything else because the random cropping makes the data invalid anyway
             data_dict['image'], data_dict['hand_parts'], data_dict['hand_mask'] = tensor_stack_cropped[:, :, :3],\
@@ -394,13 +396,13 @@ class BinaryDbReader(object):
         names, tensors = zip(*data_dict.items())
 
         if self.shuffle:
-            tensors = tf.train.shuffle_batch_join([tensors],
+            tensors = tf.compat.v1.train.shuffle_batch_join([tensors],
                                                   batch_size=self.batch_size,
                                                   capacity=100,
                                                   min_after_dequeue=50,
                                                   enqueue_many=False)
         else:
-            tensors = tf.train.batch_join([tensors],
+            tensors = tf.compat.v1.train.batch_join([tensors],
                                           batch_size=self.batch_size,
                                           capacity=100,
                                           enqueue_many=False)
@@ -413,7 +415,7 @@ class BinaryDbReader(object):
     def create_multiple_gaussian_map(coords_uv, output_size, sigma, valid_vec=None):
         """ Creates a map of size (output_shape[0], output_shape[1]) at (center[0], center[1])
             with variance sigma for multiple coordinates."""
-        with tf.name_scope('create_multiple_gaussian_map'):
+        with tf.compat.v1.name_scope('create_multiple_gaussian_map'):
             sigma = tf.cast(sigma, tf.float32)
             assert len(output_size) == 2
             s = coords_uv.get_shape().as_list()

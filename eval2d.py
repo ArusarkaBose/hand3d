@@ -36,7 +36,7 @@ from nets.ColorHandPose3DNetwork import ColorHandPose3DNetwork
 from utils.general import detect_keypoints, trafo_coords, EvalUtil, load_weights_from_snapshot
 
 # flag that allows to load a retrained snapshot(original weights used in the paper are used otherwise)
-USE_RETRAINED = False
+USE_RETRAINED = True
 PATH_TO_POSENET_SNAPSHOTS = './snapshots_posenet/'  # only used when USE_RETRAINED is true
 PATH_TO_HANDSEGNET_SNAPSHOTS = './snapshots_handsegnet/'  # only used when USE_RETRAINED is true
 
@@ -50,7 +50,7 @@ data = dataset.get()
 net = ColorHandPose3DNetwork()
 
 # scale input to common size for evaluation
-image_scaled = tf.image.resize_images(data['image'], (240, 320))
+image_scaled = tf.image.resize(data['image'], (240, 320))
 s = data['image'].get_shape().as_list()
 scale = (240.0/s[1], 320.0/s[2])
 
@@ -58,9 +58,9 @@ scale = (240.0/s[1], 320.0/s[2])
 keypoints_scoremap, _, scale_crop, center = net.inference2d(image_scaled)
 
 # Start TF
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-tf.train.start_queue_runners(sess=sess)
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.8)
+sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
+tf.compat.v1.train.start_queue_runners(sess=sess)
 
 # initialize network weights
 if USE_RETRAINED:

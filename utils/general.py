@@ -18,6 +18,9 @@
 from __future__ import print_function, unicode_literals
 
 import tensorflow as tf
+import tf_slim as slim
+
+
 from tensorflow.python import pywrap_tensorflow
 import numpy as np
 import math
@@ -34,19 +37,19 @@ class NetworkOps(object):
 
     @classmethod
     def conv(cls, in_tensor, layer_name, kernel_size, stride, out_chan, trainable=True):
-        with tf.variable_scope(layer_name):
+        with tf.compat.v1.variable_scope(layer_name):
             in_size = in_tensor.get_shape().as_list()
 
             strides = [1, stride, stride, 1]
             kernel_shape = [kernel_size, kernel_size, in_size[3], out_chan]
 
             # conv
-            kernel = tf.get_variable('weights', kernel_shape, tf.float32,
-                                     tf.contrib.layers.xavier_initializer_conv2d(), trainable=trainable, collections=['wd', 'variables', 'filters'])
+            kernel = tf.compat.v1.get_variable('weights', kernel_shape, tf.float32,
+                                     tf.initializers.GlorotUniform(), trainable=trainable, collections=['wd', 'variables', 'filters'])
             tmp_result = tf.nn.conv2d(in_tensor, kernel, strides, padding='SAME')
 
             # bias
-            biases = tf.get_variable('biases', [kernel_shape[3]], tf.float32,
+            biases = tf.compat.v1.get_variable('biases', [kernel_shape[3]], tf.float32,
                                      tf.constant_initializer(0.0001), trainable=trainable, collections=['wd', 'variables', 'biases'])
             out_tensor = tf.nn.bias_add(tmp_result, biases, name='out')
 
@@ -66,7 +69,7 @@ class NetworkOps(object):
 
     @classmethod
     def upconv(cls, in_tensor, layer_name, output_shape, kernel_size, stride, trainable=True):
-        with tf.variable_scope(layer_name):
+        with tf.compat.v1.variable_scope(layer_name):
             in_size = in_tensor.get_shape().as_list()
 
             kernel_shape = [kernel_size, kernel_size, in_size[3], in_size[3]]
@@ -78,7 +81,7 @@ class NetworkOps(object):
                                                 strides=strides, padding='SAME')
 
             # bias
-            biases = tf.get_variable('biases', [kernel_shape[2]], tf.float32,
+            biases = tf.compat.v1.get_variable('biases', [kernel_shape[2]], tf.float32,
                                      tf.constant_initializer(0.0), trainable=trainable, collections=['wd', 'variables', 'biases'])
             out_tensor = tf.nn.bias_add(tmp_result, biases)
             return out_tensor
@@ -106,25 +109,25 @@ class NetworkOps(object):
 
         init = tf.constant_initializer(value=weights,
                                        dtype=tf.float32)
-        return tf.get_variable(name="weights", initializer=init,
+        return tf.compat.v1.get_variable(name="weights", initializer=init,
                                shape=weights.shape, trainable=trainable, collections=['wd', 'variables', 'filters'])
 
     @staticmethod
     def fully_connected(in_tensor, layer_name, out_chan, trainable=True):
-        with tf.variable_scope(layer_name):
+        with tf.compat.v1.variable_scope(layer_name):
             in_size = in_tensor.get_shape().as_list()
             assert len(in_size) == 2, 'Input to a fully connected layer must be a vector.'
             weights_shape = [in_size[1], out_chan]
 
             # weight matrix
-            weights = tf.get_variable('weights', weights_shape, tf.float32,
-                                     tf.contrib.layers.xavier_initializer(), trainable=trainable)
-            weights = tf.check_numerics(weights, 'weights: %s' % layer_name)
+            weights = tf.compat.v1.get_variable('weights', weights_shape, tf.float32,
+                                     tf.initializers.GlorotUniform(), trainable=trainable)
+            weights = tf.debugging.check_numerics(weights, 'weights: %s' % layer_name)
 
             # bias
-            biases = tf.get_variable('biases', [out_chan], tf.float32,
+            biases = tf.compat.v1.get_variable('biases', [out_chan], tf.float32,
                                      tf.constant_initializer(0.0001), trainable=trainable)
-            biases = tf.check_numerics(biases, 'biases: %s' % layer_name)
+            biases = tf.debugging.check_numerics(biases, 'biases: %s' % layer_name)
 
             out_tensor = tf.matmul(in_tensor, weights) + biases
             return out_tensor
@@ -138,24 +141,24 @@ class NetworkOps(object):
     @staticmethod
     def dropout(in_tensor, keep_prob, evaluation):
         """ Dropout: Each neuron is dropped independently. """
-        with tf.variable_scope('dropout'):
+        with tf.compat.v1.variable_scope('dropout'):
             tensor_shape = in_tensor.get_shape().as_list()
             out_tensor = tf.cond(evaluation,
-                                 lambda: tf.nn.dropout(in_tensor, 1.0,
+                                 lambda: tf.nn.dropout(in_tensor, 0,
                                                        noise_shape=tensor_shape),
-                                 lambda: tf.nn.dropout(in_tensor, keep_prob,
+                                 lambda: tf.nn.dropout(in_tensor, 1-keep_prob,
                                                        noise_shape=tensor_shape))
             return out_tensor
 
     @staticmethod
     def spatial_dropout(in_tensor, keep_prob, evaluation):
         """ Spatial dropout: Not each neuron is dropped independently, but feature map wise. """
-        with tf.variable_scope('spatial_dropout'):
+        with tf.compat.v1.variable_scope('spatial_dropout'):
             tensor_shape = in_tensor.get_shape().as_list()
             out_tensor = tf.cond(evaluation,
-                                 lambda: tf.nn.dropout(in_tensor, 1.0,
+                                 lambda: tf.nn.dropout(in_tensor, 0,
                                                        noise_shape=tensor_shape),
-                                 lambda: tf.nn.dropout(in_tensor, keep_prob,
+                                 lambda: tf.nn.dropout(in_tensor, 1-keep_prob,
                                                        noise_shape=[tensor_shape[0], 1, 1, tensor_shape[3]]))
             return out_tensor
 
@@ -198,7 +201,7 @@ def crop_image_from_xy(image, crop_location, crop_size, scale=1.0):
 
 def find_max_location(scoremap):
     """ Returns the coordinates of the given scoremap with maximum value. """
-    with tf.variable_scope('find_max_location'):
+    with tf.compat.v1.variable_scope('find_max_location'):
         s = scoremap.get_shape().as_list()
         if len(s) == 4:
             scoremap = tf.squeeze(scoremap, [3])
@@ -218,7 +221,7 @@ def find_max_location(scoremap):
         x_vec = tf.reshape(X, [-1])
         y_vec = tf.reshape(Y, [-1])
         scoremap_vec = tf.reshape(scoremap, [s[0], -1])
-        max_ind_vec = tf.cast(tf.argmax(scoremap_vec, dimension=1), tf.int32)
+        max_ind_vec = tf.cast(tf.argmax(scoremap_vec, axis=1), tf.int32)
 
         xy_loc = list()
         for i in range(s[0]):
@@ -232,7 +235,7 @@ def find_max_location(scoremap):
 
 def single_obj_scoremap(scoremap):
     """ Applies my algorithm to figure out the most likely object from a given segmentation scoremap. """
-    with tf.variable_scope('single_obj_scoremap'):
+    with tf.compat.v1.variable_scope('single_obj_scoremap'):
         filter_size = 21
         s = scoremap.get_shape().as_list()
         assert len(s) == 4, "Scoremap must be 4D."
@@ -250,13 +253,13 @@ def single_obj_scoremap(scoremap):
         for i in range(s[0]):
             # create initial objectmap (put a one at the maximum)
             sparse_ind = tf.reshape(max_loc[i, :], [1, 2])  # reshape that its one point with 2dim)
-            objectmap = tf.sparse_to_dense(sparse_ind, [s[1], s[2]], 1.0)
+            objectmap = tf.compat.v1.sparse_to_dense(sparse_ind, [s[1], s[2]], 1.0)
 
             # grow the map by dilation and pixelwise and
             num_passes = max(s[1], s[2]) // (filter_size//2) # number of passes needes to make sure the map can spread over the whole image
             for j in range(num_passes):
                 objectmap = tf.reshape(objectmap, [1, s[1], s[2], 1])
-                objectmap_dil = tf.nn.dilation2d(objectmap, kernel_dil, [1, 1, 1, 1], [1, 1, 1, 1], 'SAME')
+                objectmap_dil = tf.nn.dilation2d(objectmap, kernel_dil, [1, 1, 1, 1], dilations=[1, 1, 1, 1], padding='SAME',data_format="NHWC")
                 objectmap_dil = tf.reshape(objectmap_dil, [s[1], s[2]])
                 objectmap = tf.round(tf.multiply(detmap_fg[i, :, :], objectmap_dil))
 
@@ -270,7 +273,7 @@ def single_obj_scoremap(scoremap):
 
 def calc_center_bb(binary_class_mask):
     """ Returns the center of mass coordinates for the given binary_class_mask. """
-    with tf.variable_scope('calc_center_bb'):
+    with tf.compat.v1.variable_scope('calc_center_bb'):
         binary_class_mask = tf.cast(binary_class_mask, tf.int32)
         binary_class_mask = tf.equal(binary_class_mask, 1)
         s = binary_class_mask.get_shape().as_list()
@@ -308,7 +311,7 @@ def calc_center_bb(binary_class_mask):
             center_y = 0.5*(y_max + y_min)
             center = tf.stack([center_x, center_y], 0)
 
-            center = tf.cond(tf.reduce_all(tf.is_finite(center)), lambda: center,
+            center = tf.cond(tf.reduce_all(tf.math.is_finite(center)), lambda: center,
                                   lambda: tf.constant([160.0, 160.0]))
             center.set_shape([2])
             center_list.append(center)
@@ -316,7 +319,7 @@ def calc_center_bb(binary_class_mask):
             crop_size_x = x_max - x_min
             crop_size_y = y_max - y_min
             crop_size = tf.expand_dims(tf.maximum(crop_size_x, crop_size_y), 0)
-            crop_size = tf.cond(tf.reduce_all(tf.is_finite(crop_size)), lambda: crop_size,
+            crop_size = tf.cond(tf.reduce_all(tf.math.is_finite(crop_size)), lambda: crop_size,
                                   lambda: tf.constant([100.0]))
             crop_size.set_shape([1])
             crop_size_list.append(crop_size)
@@ -613,7 +616,7 @@ class EvalUtil:
 
 def load_weights_from_snapshot(session, checkpoint_path, discard_list=None, rename_dict=None):
         """ Loads weights from a snapshot except the ones indicated with discard_list. Others are possibly renamed. """
-        reader = pywrap_tensorflow.NewCheckpointReader(checkpoint_path)
+        reader = tf.compat.v1.train.NewCheckpointReader(checkpoint_path)
         var_to_shape_map = reader.get_variable_to_shape_map()
 
         # Remove everything from the discard list
@@ -646,7 +649,7 @@ def load_weights_from_snapshot(session, checkpoint_path, discard_list=None, rena
             var_to_shape_map_new[new_name] = reader.get_tensor(name)
         var_to_shape_map = dict(var_to_shape_map_new)
 
-        init_op, init_feed = tf.contrib.framework.assign_from_values(var_to_shape_map)
+        init_op, init_feed = slim.assign_from_values(var_to_shape_map)
         session.run(init_op, init_feed)
         print('Initialized %d variables from %s.' % (len(var_to_shape_map), checkpoint_path))
 

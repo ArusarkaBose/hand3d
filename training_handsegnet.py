@@ -42,14 +42,14 @@ dataset = BinaryDbReader(mode='training',
 data = dataset.get()
 
 # build network
-evaluation = tf.placeholder_with_default(True, shape=())
+evaluation = tf.compat.v1.placeholder_with_default(True, shape=())
 net = ColorHandPose3DNetwork()
 hand_mask_pred = net.inference_detection(data['image'], train=True)
 
 # Start TF
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-tf.train.start_queue_runners(sess=sess)
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.8)
+sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
+tf.compat.v1.train.start_queue_runners(sess=sess)
 
 # Loss
 loss = 0.0
@@ -57,18 +57,18 @@ s = data['hand_mask'].get_shape().as_list()
 for i, pred_item in enumerate(hand_mask_pred):
     gt = tf.reshape(data['hand_mask'], [s[0]*s[1]*s[2], -1])
     pred = tf.reshape(hand_mask_pred, [s[0]*s[1]*s[2], -1])
-    loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=gt))
+    loss += tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=tf.stop_gradient(gt)))
 
 # Solver
 global_step = tf.Variable(0, trainable=False, name="global_step")
 lr_scheduler = LearningRateScheduler(values=train_para['lr'], steps=train_para['lr_iter'])
 lr = lr_scheduler.get_lr(global_step)
-opt = tf.train.AdamOptimizer(lr)
+opt = tf.compat.v1.train.AdamOptimizer(lr)
 train_op = opt.minimize(loss)
 
 # init weights
-sess.run(tf.global_variables_initializer())
-saver = tf.train.Saver(max_to_keep=1, keep_checkpoint_every_n_hours=4.0)
+sess.run(tf.compat.v1.global_variables_initializer())
+saver = tf.compat.v1.train.Saver(max_to_keep=1, keep_checkpoint_every_n_hours=4.0)
 
 rename_dict = {'CPM/PersonNet': 'HandSegNet',
                '_CPM': ''}

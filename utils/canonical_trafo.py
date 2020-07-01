@@ -25,15 +25,15 @@ def atan2(y, x):
     one_map = tf.ones_like(tan)
 
     # correct quadrant error
-    correction = tf.where(tf.less(x + 1e-8, 0.0), 3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.less(x + 1e-8, 0.0), 3.141592653589793*one_map, 0.0*one_map)
     tan_c = tan + correction  # this returns in -pi/2 .. 3pi/2
 
     # bring to positive values
-    correction = tf.where(tf.less(tan_c, 0.0), 2*3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.less(tan_c, 0.0), 2*3.141592653589793*one_map, 0.0*one_map)
     tan_zero_2pi = tan_c + correction  # this returns in 0 .. 2pi
 
     # make symmetric
-    correction = tf.where(tf.greater(tan_zero_2pi, 3.141592653589793), -2*3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.greater(tan_zero_2pi, 3.141592653589793), -2*3.141592653589793*one_map, 0.0*one_map)
     tan_final = tan_zero_2pi + correction  # this returns in -pi .. pi
     return tan_final
 
@@ -56,7 +56,7 @@ def _stitch_mat_from_vecs(vector_list):
                                       [6], [7], [8]], vector_list)
 
     trafo_matrix = tf.reshape(trafo_matrix, [3, 3, batch_size])
-    trafo_matrix = tf.transpose(trafo_matrix, [2, 0, 1])
+    trafo_matrix = tf.transpose(a=trafo_matrix, perm=[2, 0, 1])
 
     return trafo_matrix
 
@@ -99,7 +99,7 @@ def canonical_trafo(coords_xyz):
         Inputs:
             coords_xyz: BxNx3 matrix, containing the coordinates for each of the N keypoints
     """
-    with tf.variable_scope('canonical-trafo'):
+    with tf.compat.v1.variable_scope('canonical-trafo'):
         coords_xyz = tf.reshape(coords_xyz, [-1, 21, 3])
 
         ROOT_NODE_ID = 0  # Node that will be at 0/0/0: 0=palm keypoint (root)
@@ -143,7 +143,7 @@ def flip_right_hand(coords_xyz_canonical, cond_right):
         Inputs:
             coords_xyz_canonical: Nx3 matrix, containing the coordinates for each of the N keypoints
     """
-    with tf.variable_scope('flip-right-hand'):
+    with tf.compat.v1.variable_scope('flip-right-hand'):
         expanded = False
         s = coords_xyz_canonical.get_shape().as_list()
         if len(s) == 2:
@@ -155,7 +155,7 @@ def flip_right_hand(coords_xyz_canonical, cond_right):
         coords_xyz_canonical_mirrored = tf.stack([coords_xyz_canonical[:, :, 0], coords_xyz_canonical[:, :, 1], -coords_xyz_canonical[:, :, 2]], -1)
 
         # select mirrored in case it was a right hand
-        coords_xyz_canonical_left = tf.where(cond_right, coords_xyz_canonical_mirrored, coords_xyz_canonical)
+        coords_xyz_canonical_left = tf.compat.v1.where(cond_right, coords_xyz_canonical_mirrored, coords_xyz_canonical)
 
         if expanded:
             coords_xyz_canonical_left = tf.squeeze(coords_xyz_canonical_left, [0])

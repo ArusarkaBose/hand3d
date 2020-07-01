@@ -20,7 +20,7 @@ def _stitch_mat_from_vecs(vector_list):
                                       [12], [13], [14], [15]], vector_list)
 
     trafo_matrix = tf.reshape(trafo_matrix, [4, 4, batch_size])
-    trafo_matrix = tf.transpose(trafo_matrix, [2, 0, 1])
+    trafo_matrix = tf.transpose(a=trafo_matrix, perm=[2, 0, 1])
 
     return trafo_matrix
 
@@ -32,15 +32,15 @@ def _atan2(y, x):
     one_map = tf.ones_like(tan)
 
     # correct quadrant error
-    correction = tf.where(tf.less(x + 1e-8, 0.0), 3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.less(x + 1e-8, 0.0), 3.141592653589793*one_map, 0.0*one_map)
     tan_c = tan + correction  # this returns in -pi/2 .. 3pi/2
 
     # bring to positive values
-    correction = tf.where(tf.less(tan_c, 0.0), 2*3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.less(tan_c, 0.0), 2*3.141592653589793*one_map, 0.0*one_map)
     tan_zero_2pi = tan_c + correction  # this returns in 0 .. 2pi
 
     # make symmetric
-    correction = tf.where(tf.greater(tan_zero_2pi, 3.141592653589793), -2*3.141592653589793*one_map, 0.0*one_map)
+    correction = tf.compat.v1.where(tf.greater(tan_zero_2pi, 3.141592653589793), -2*3.141592653589793*one_map, 0.0*one_map)
     tan_final = tan_zero_2pi + correction  # this returns in -pi .. pi
     return tan_final
 
@@ -114,7 +114,7 @@ def _forward(length, angle_x, angle_y, T):
     # x0 = tf.constant([[0.0], [0.0], [0.0], [1.0]])
     s = length.get_shape().as_list()
     x0 = _to_hom(tf.zeros((s[0], 3, 1)))
-    x = tf.matmul(tf.matrix_inverse(T), x0)
+    x = tf.matmul(tf.linalg.inv(T), x0)
     return x, T
 
 
@@ -190,7 +190,7 @@ def bone_rel_trafo(coords_xyz):
         Inputs:
             coords_xyz: BxNx3 matrix, containing the coordinates for each of the N keypoints
     """
-    with tf.variable_scope('bone_rel_transformation'):
+    with tf.compat.v1.variable_scope('bone_rel_transformation'):
         coords_xyz = tf.reshape(coords_xyz, [-1, 21, 3])
 
         # list of results
@@ -246,7 +246,7 @@ def bone_rel_trafo_inv(coords_rel):
         Inputs:
             coords_rel: BxNx3 matrix, containing the coordinates for each of the N keypoints [length, angle_x, angle_y]
     """
-    with tf.variable_scope('assemble_bone_rel'):
+    with tf.compat.v1.variable_scope('assemble_bone_rel'):
         s = coords_rel.get_shape().as_list()
         if len(s) == 2:
             coords_rel = tf.expand_dims(coords_rel, 0)

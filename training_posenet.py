@@ -42,34 +42,34 @@ dataset = BinaryDbReader(mode='training',
 data = dataset.get()
 
 # build network
-evaluation = tf.placeholder_with_default(True, shape=())
+evaluation = tf.compat.v1.placeholder_with_default(True, shape=())
 net = ColorHandPose3DNetwork()
 keypoints_scoremap = net.inference_pose2d(data['image_crop'], train=True)
 s = data['scoremap'].get_shape().as_list()
-keypoints_scoremap = [tf.image.resize_images(x, (s[1], s[2])) for x in keypoints_scoremap]
+keypoints_scoremap = [tf.image.resize(x, (s[1], s[2])) for x in keypoints_scoremap]
 
 # Start TF
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-tf.train.start_queue_runners(sess=sess)
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.8)
+sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
+tf.compat.v1.train.start_queue_runners(sess=sess)
 
 # Loss
 loss = 0.0
 s = data['scoremap'].get_shape().as_list()
 vis = tf.cast(tf.reshape(data['keypoint_vis21'], [s[0], s[3]]), tf.float32)
 for i, pred_item in enumerate(keypoints_scoremap):
-    loss += tf.reduce_sum(vis * tf.sqrt(tf.reduce_mean(tf.square(pred_item - data['scoremap']), [1, 2]))) / (tf.reduce_sum(vis) + 0.001)
+    loss += tf.reduce_sum(input_tensor=vis * tf.sqrt(tf.reduce_mean(input_tensor=tf.square(pred_item - data['scoremap']), axis=[1, 2]))) / (tf.reduce_sum(input_tensor=vis) + 0.001)
 
 # Solver
 global_step = tf.Variable(0, trainable=False, name="global_step")
 lr_scheduler = LearningRateScheduler(values=train_para['lr'], steps=train_para['lr_iter'])
 lr = lr_scheduler.get_lr(global_step)
-opt = tf.train.AdamOptimizer(lr)
+opt = tf.compat.v1.train.AdamOptimizer(lr)
 train_op = opt.minimize(loss)
 
 # init weights
-sess.run(tf.global_variables_initializer())
-saver = tf.train.Saver(max_to_keep=1, keep_checkpoint_every_n_hours=4.0)
+sess.run(tf.compat.v1.global_variables_initializer())
+saver = tf.compat.v1.train.Saver(max_to_keep=1, keep_checkpoint_every_n_hours=4.0)
 
 rename_dict = {'CPM/PoseNet': 'PoseNet2D',
                '_CPM': ''}

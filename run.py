@@ -17,11 +17,15 @@
 #
 from __future__ import print_function, unicode_literals
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 import numpy as np
 import scipy.misc
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import imageio
+from PIL import Image
 
 from nets.ColorHandPose3DNetwork import ColorHandPose3DNetwork
 from utils.general import detect_keypoints, trafo_coords, plot_hand, plot_hand_3d
@@ -34,6 +38,13 @@ if __name__ == '__main__':
     image_list.append('./data/img3.png')
     image_list.append('./data/img4.png')
     image_list.append('./data/img5.png')
+    #image_list.append('./data/test1.jpg')
+    #image_list.append('./data/test2.jpg')
+    #image_list.append('./data/test3.jpg')
+    #image_list.append('./data/test4.jpg')
+    #image_list.append('./data/test5.jpg')
+    #image_list.append('./data/test6.jpg')
+    #image_list.append('./data/five.jpeg')
 
     # network input
     image_tf = tf.placeholder(tf.float32, shape=(1, 240, 320, 3))
@@ -54,8 +65,8 @@ if __name__ == '__main__':
 
     # Feed image list through network
     for img_name in image_list:
-        image_raw = scipy.misc.imread(img_name)
-        image_raw = scipy.misc.imresize(image_raw, (240, 320))
+        image_raw = imageio.imread(img_name)
+        image_raw = np.array(Image.fromarray(image_raw).resize((320,240)))
         image_v = np.expand_dims((image_raw.astype('float') / 255.0) - 0.5, 0)
 
         hand_scoremap_v, image_crop_v, scale_v, center_v,\
